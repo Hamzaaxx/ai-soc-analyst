@@ -11,7 +11,7 @@ Most SOC labs stop at "I installed a SIEM and watched alerts." This project goes
 1. **Simulate real attacks** (MITRE ATT&CK techniques) against monitored endpoints
 2. **Detect them** with Wazuh + Sysmon + auditd
 3. **Enrich every alert** with live threat intelligence (VirusTotal, AbuseIPDB)
-4. **Triage with AI** — Claude LLM reads the alert, decides true/false positive, maps it to MITRE, and writes a plain-English analyst note
+4. **Triage with AI** — Llama 3.3 70B (via Groq) reads the alert, decides true/false positive, maps it to MITRE, and writes a plain-English analyst note
 5. **Respond automatically** — block malicious IPs, open TheHive cases, fire Slack alerts — all without touching a keyboard
 
 **The result:** a measurable reduction in analyst triage time. Alert fatigue is the #1 SOC pain point. This lab quantifies the fix.
@@ -57,16 +57,15 @@ Most SOC labs stop at "I installed a SIEM and watched alerts." This project goes
 │       ↓                                                         │
 │  [VirusTotal] + [AbuseIPDB]  ← Enrichment                      │
 │       ↓                                                         │
-│  [Claude AI] ← System prompt + enriched alert                  │
+│  [Groq AI / Llama 3.3 70B] ← System prompt + enriched alert   │
 │       ↓                                                         │
 │  {verdict, mitre, summary, recommended_actions}                 │
 │       ↓                                                         │
-│  ┌────────────┬─────────────────┬──────────────────┐           │
-│  │ True Pos.  │ False Positive  │ Informational    │           │
-│  │ → TheHive  │ → Suppress log  │ → Dashboard only │           │
-│  │ → Slack    │                 │                  │           │
-│  │ → Block IP │                 │                  │           │
-│  └────────────┴─────────────────┴──────────────────┘           │
+│  ┌────────────────────┬─────────────────┬──────────────────┐    │
+│  │ True Positive      │ False Positive  │ Informational    │    │
+│  │ → Slack alert      │ → Suppress log  │ → Dashboard only │    │
+│  │ → TheHive (planned)│                 │                  │    │
+│  └────────────────────┴─────────────────┴──────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -76,15 +75,15 @@ Most SOC labs stop at "I installed a SIEM and watched alerts." This project goes
 
 | Layer | Tool | Role |
 |---|---|---|
-| **SIEM** | Wazuh 4.7 | Detect, correlate, map to MITRE |
+| **SIEM** | Wazuh 4.14.5 | Detect, correlate, map to MITRE |
 | **Telemetry (Windows)** | Sysmon + SwiftOnSecurity config | Process, network, registry, DNS |
 | **Telemetry (Linux)** | auditd + custom rules | Syscalls, file access, commands |
 | **Attacker** | Kali Linux | Attack simulation |
 | **Attack framework** | Atomic Red Team | MITRE-mapped safe test techniques |
 | **Orchestration / SOAR** | n8n (self-hosted, Docker) | Visual workflow automation |
 | **Threat Intel** | VirusTotal API + AbuseIPDB API | IP/hash reputation enrichment |
-| **AI Analyst** | Claude (Anthropic API) | LLM-powered triage & summarization |
-| **Case Management** | TheHive | Incident tracking |
+| **AI Analyst** | Llama 3.3 70B via Groq API | LLM-powered triage & summarization |
+| **Case Management** | TheHive (planned) | Incident tracking |
 | **Alerting** | Slack webhook | Real-time analyst notification |
 | **Infrastructure** | VirtualBox + Ubuntu VMs | Isolated home lab |
 
@@ -94,31 +93,31 @@ Most SOC labs stop at "I installed a SIEM and watched alerts." This project goes
 
 | VM | OS | RAM | Role | Network |
 |---|---|---|---|---|
-| **Wazuh-Server** | Ubuntu 22.04 | 4 GB | SIEM (manager + indexer + dashboard) | NAT + Host-Only |
-| **Ubuntu-Server** | Ubuntu 22.04 | 3 GB | Endpoint + n8n + TheHive host | NAT + Host-Only |
-| **Kali** | Kali Linux | 2 GB | Attacker (use only when simulating attacks) | Host-Only only |
-| **Windows 11** | Windows 11 Home | host | Primary monitored endpoint | Host-Only adapter |
+| **Wazuh-Serverr** | Ubuntu (64-bit) | 4 GB | SIEM (manager + indexer + dashboard) | NAT + Host-Only |
+| **ubuntu** | Ubuntu (64-bit) | 2.6 GB | Endpoint + n8n + Docker host | NAT + Host-Only |
+| **kali-linux-2025.4** | Kali Linux | 2 GB | Attacker (use only when simulating attacks) | NAT + Host-Only |
+| **Windows 11** | Windows 11 Home | host | Primary monitored endpoint | Host (192.168.56.1) |
 
 **Host-Only network:** `192.168.56.0/24`
 - Wazuh server: `192.168.56.103`
-- Ubuntu server: TBD after setup
-- Kali: TBD
+- Ubuntu server: `192.168.56.104`
+- Windows host: `192.168.56.1`
 
 ---
 
 ## 📋 Prerequisites
 
 - [x] VirtualBox installed on Windows 11 host
-- [x] Wazuh all-in-one server installed and running
-- [x] Windows 11 Wazuh agent — Active (agent 001)
+- [x] Wazuh all-in-one server installed and running (`192.168.56.103`)
+- [x] Windows 11 Wazuh agent — Active (agent 001, WIN-NSOIB3358K2)
 - [x] Sysmon installed + Wazuh ingesting `Microsoft-Windows-Sysmon/Operational`
-- [ ] Ubuntu server VM with Wazuh agent + auditd
-- [ ] n8n running in Docker
-- [ ] VirusTotal free API key
-- [ ] AbuseIPDB free API key
-- [ ] Anthropic API key (for Claude)
-- [ ] Slack workspace + incoming webhook URL
-- [ ] TheHive installed
+- [x] Ubuntu server VM with Wazuh agent + auditd (`192.168.56.104`)
+- [x] n8n running in Docker on Ubuntu VM
+- [x] VirusTotal free API key
+- [x] AbuseIPDB free API key
+- [x] Groq API key (Llama 3.3 70B)
+- [x] Slack workspace + incoming webhook URL
+- [ ] TheHive installed (planned)
 - [ ] GitHub repo initialized
 
 ---
@@ -264,13 +263,13 @@ Invoke-AtomicTest T1112 -TestNumbers 1
 #### Kali attacks (from Kali VM → Windows/Ubuntu)
 ```bash
 # SSH brute force against Ubuntu
-hydra -l root -P /usr/share/wordlists/rockyou.txt ssh://192.168.56.x
+hydra -l root -P /usr/share/wordlists/rockyou.txt ssh://192.168.56.104
 
 # Port scan (reconnaissance)
-nmap -sS -sV -O 192.168.56.x
+nmap -sS -sV -O 192.168.56.104
 
 # Web directory brute force
-gobuster dir -u http://192.168.56.x -w /usr/share/wordlists/dirb/common.txt
+gobuster dir -u http://192.168.56.104 -w /usr/share/wordlists/dirb/common.txt
 ```
 
 **For each detection in Wazuh, record:**
@@ -321,7 +320,8 @@ services:
       - N8N_PROTOCOL=http
       - NODE_ENV=production
       - N8N_ENCRYPTION_KEY=changeme-use-a-long-random-string
-      - WEBHOOK_URL=http://192.168.56.x:5678/
+      - WEBHOOK_URL=http://192.168.56.104:5678/
+      - N8N_SECURE_COOKIE=false
     volumes:
       - n8n_data:/home/node/.n8n
 volumes:
@@ -332,7 +332,7 @@ volumes:
 docker compose up -d
 ```
 
-**Access:** `http://192.168.56.x:5678` from your Windows browser.
+**Access:** `http://192.168.56.104:5678` from your Windows browser.
 
 ---
 
@@ -343,7 +343,7 @@ docker compose up -d
 #### n8n side: create a Webhook node
 1. New workflow → add **Webhook** node
 2. Method: POST, path: `wazuh-alert`
-3. Copy the webhook URL (e.g. `http://192.168.56.x:5678/webhook/wazuh-alert`)
+3. Copy the webhook URL (e.g. `http://192.168.56.104:5678/webhook/wazuh-alert`)
 4. Activate the workflow
 
 #### Wazuh side: integration script
@@ -351,20 +351,23 @@ On the **Wazuh server VM**, create `/var/ossec/integrations/custom-n8n`:
 ```bash
 sudo tee /var/ossec/integrations/custom-n8n << 'SCRIPT'
 #!/usr/bin/env python3
-import json, sys, urllib.request
+import sys, json, urllib.request, urllib.error
 
-alert_file = sys.argv[1]
-with open(alert_file) as f:
-    alert = json.load(f)
-
-payload = json.dumps(alert).encode()
-req = urllib.request.Request(
-    'http://192.168.56.x:5678/webhook/wazuh-alert',
-    data=payload,
-    headers={'Content-Type': 'application/json'},
-    method='POST'
-)
-urllib.request.urlopen(req, timeout=10)
+N8N_WEBHOOK = 'http://192.168.56.104:5678/webhook/wazuh-alert'
+try:
+    with open(sys.argv[1]) as f:
+        alert = json.load(f)
+    payload = json.dumps(alert).encode('utf-8')
+    req = urllib.request.Request(
+        N8N_WEBHOOK,
+        data=payload,
+        headers={'Content-Type': 'application/json'},
+        method='POST'
+    )
+    urllib.request.urlopen(req, timeout=10)
+except Exception as e:
+    with open('/var/ossec/logs/n8n-integration.log', 'a') as log:
+        log.write(f'ERROR: {e}\n')
 SCRIPT
 
 sudo chmod 750 /var/ossec/integrations/custom-n8n
@@ -394,38 +397,46 @@ sudo systemctl restart wazuh-manager
 
 #### n8n workflow nodes (add after Webhook):
 
-**1. Extract IOCs (Code node):**
+**1. Extract IOCs (node name: "Code in JavaScript"):**
 ```javascript
 const alert = $input.first().json;
 const srcIp = alert?.data?.srcip || alert?.agent?.ip || null;
 const fileHash = alert?.data?.win?.eventdata?.hashes?.split(',')
   .find(h => h.startsWith('SHA256='))?.replace('SHA256=','') || null;
+const ruleLevel = alert?.rule?.level;
+const ruleDesc = alert?.rule?.description;
+const agentName = alert?.agent?.name;
+const ruleId = alert?.rule?.id;
 
-return [{ json: { alert, srcIp, fileHash } }];
+return [{ json: { alert, srcIp, fileHash, ruleLevel, ruleDesc, agentName, ruleId } }];
 ```
 
-**2. VirusTotal IP check (HTTP Request node):**
+**2. VirusTotal IP check (node name: "HTTP Request"):**
 - Method: GET
-- URL: `https://www.virustotal.com/api/v3/ip_addresses/{{ $json.srcIp }}`
+- URL: `https://www.virustotal.com/api/v3/ip_addresses/{{ $json.srcIp || '127.0.0.1' }}`
 - Header: `x-apikey: YOUR_VT_KEY`
-- Only execute if `srcIp` is not null
 
-**3. AbuseIPDB check (HTTP Request node):**
+> Note: the `|| '127.0.0.1'` fallback handles alerts with no source IP (e.g. local Windows commands like `net user`). VirusTotal returns a benign result for localhost.
+
+**3. AbuseIPDB check (node name: "HTTP Request1"):**
 - Method: GET
-- URL: `https://api.abuseipdb.com/api/v2/check?ipAddress={{ $json.srcIp }}&maxAgeInDays=90`
-- Header: `Key: YOUR_ABUSEIPDB_KEY`
+- URL: `https://api.abuseipdb.com/api/v2/check`
+- Query params: `ipAddress: {{ $('Code in JavaScript').first().json.srcIp || '127.0.0.1' }}`, `maxAgeInDays: 90`
+- Headers: `Key: YOUR_ABUSEIPDB_KEY`, `Accept: application/json`
 
-**4. Merge enrichment (Code node):**
+**4. Merge enrichment (node name: "Code in JavaScript1"):**
 ```javascript
-const alert = $('Extract IOCs').first().json.alert;
-const vtData = $('VirusTotal').first()?.json || {};
-const abuseData = $('AbuseIPDB').first()?.json?.data || {};
+const base = $('Code in JavaScript').first().json;
+const vtData = $('HTTP Request').first()?.json || {};
+const abuseData = $('HTTP Request1').first()?.json?.data || {};
 
 return [{
   json: {
-    alert,
+    alert: base.alert,
+    srcIp: base.srcIp,
+    agentName: base.agentName,
     enrichment: {
-      ip: alert.data?.srcip,
+      ip: base.srcIp,
       vt_malicious: vtData?.data?.attributes?.last_analysis_stats?.malicious || 0,
       vt_total: vtData?.data?.attributes?.last_analysis_stats?.total || 0,
       abuse_confidence: abuseData?.abuseConfidenceScore || 0,
@@ -438,44 +449,50 @@ return [{
 
 ---
 
-### Phase 6 — AI Analyst (Claude) ⭐
+### Phase 6 — AI Analyst (Llama 3.3 70B via Groq) ⭐
 
 **Goal:** every enriched alert gets analyzed by an LLM that produces a structured analyst verdict.
 
 **Why this is the differentiator:** SOC analysts spend most of their day reading noisy alerts, looking up IOCs, and writing "this is a false positive because..." notes. This phase automates exactly that.
 
-#### n8n HTTP Request node — Claude API call:
+#### n8n workflow — Groq API call:
 - Method: POST
-- URL: `https://api.anthropic.com/v1/messages`
+- URL: `https://api.groq.com/openai/v1/chat/completions`
 - Headers:
-  - `x-api-key: YOUR_ANTHROPIC_KEY`
-  - `anthropic-version: 2023-06-01`
-  - `content-type: application/json`
+  - `Authorization: Bearer YOUR_GROQ_KEY`
+  - `Content-Type: application/json`
 
-**Request body:**
-```json
-{
-  "model": "claude-sonnet-4-6",
-  "max_tokens": 1024,
-  "system": "You are a Tier-1 SOC analyst. Analyze the provided security alert and enrichment data. Respond ONLY with a valid JSON object in this exact format:\n{\n  \"is_true_positive\": true or false,\n  \"confidence\": \"high\" | \"medium\" | \"low\",\n  \"severity\": \"critical\" | \"high\" | \"medium\" | \"low\" | \"informational\",\n  \"mitre_technique\": \"T#### — Name\" or null,\n  \"mitre_tactic\": \"Tactic name\" or null,\n  \"summary\": \"2-3 sentence plain-English explanation of what happened and why it matters\",\n  \"recommended_actions\": [\"action 1\", \"action 2\"],\n  \"false_positive_reason\": \"explanation if false positive, else null\"\n}\nBe concise. Do not add any text outside the JSON.",
-  "messages": [
-    {
-      "role": "user",
-      "content": "Alert:\n{{ JSON.stringify($json.alert, null, 2) }}\n\nEnrichment:\n{{ JSON.stringify($json.enrichment, null, 2) }}"
-    }
+**Request body (built via Code node):**
+```javascript
+const data = $input.first().json;
+const prompt = `You are a Tier-1 SOC analyst. Analyze this alert and respond ONLY with valid JSON.
+Format: {"is_true_positive": true, "confidence": "high", "severity": "high", "mitre_technique": "T#### - Name", "mitre_tactic": "Tactic", "summary": "explanation", "recommended_actions": ["action"], "false_positive_reason": null}
+Alert: ${JSON.stringify(data.alert)}
+Enrichment: ${JSON.stringify(data.enrichment)}`;
+
+return [{ json: { ...data, groq_payload: {
+  model: "llama-3.3-70b-versatile",
+  temperature: 0.1,
+  max_tokens: 1024,
+  messages: [
+    { role: "system", content: "You are a Tier-1 SOC analyst. Respond ONLY with valid JSON." },
+    { role: "user", content: prompt }
   ]
-}
+}}}];
 ```
 
 **Parse response (Code node):**
 ```javascript
-const response = $input.first().json;
-const text = response.content[0].text;
-const verdict = JSON.parse(text);
+const data = $input.first().json;
+const raw = data.choices[0].message.content;
+const verdict = JSON.parse(raw);
 
 return [{
   json: {
-    ...$('Merge Enrichment').first().json,
+    alert: $('Code in JavaScript').first().json.alert,
+    enrichment: $('Code in JavaScript').first().json.enrichment,
+    srcIp: $('Code in JavaScript').first().json.srcIp,
+    agentName: $('Code in JavaScript').first().json.agentName,
     verdict
   }
 }];
@@ -605,7 +622,7 @@ ai-soc-analyst/
 ```
 
 #### GitHub repo topics to add:
-`wazuh`, `siem`, `soc`, `cybersecurity`, `threat-detection`, `llm`, `claude-ai`, `n8n`, `mitre-attack`, `homelab`, `soar`, `incident-response`, `blue-team`, `detection-engineering`
+`wazuh`, `siem`, `soc`, `cybersecurity`, `threat-detection`, `llm`, `groq`, `n8n`, `mitre-attack`, `homelab`, `soar`, `incident-response`, `blue-team`, `detection-engineering`
 
 #### Demo video script (3 minutes):
 1. **0:00–0:30** — show the architecture diagram, explain the concept in 3 sentences
@@ -621,9 +638,9 @@ ai-soc-analyst/
 
 | Service | Where to get | Free limit |
 |---|---|---|
-| Anthropic (Claude) | console.anthropic.com | Pay-per-token, very cheap |
-| VirusTotal | virustotal.com/gui/join-us | 4 req/min |
-| AbuseIPDB | abuseipdb.com/register | 1,000 req/day |
+| Groq (Llama 3.3 70B) | console.groq.com | Free tier, generous limits |
+| VirusTotal | virustotal.com/gui/join-us | 4 req/min free |
+| AbuseIPDB | abuseipdb.com/register | 1,000 req/day free |
 | Slack webhook | api.slack.com/apps | Free |
 
 ---
@@ -639,7 +656,7 @@ This project maps to real SOC/security engineering job requirements:
 | MITRE ATT&CK | Every test mapped to techniques |
 | Threat intelligence | VirusTotal + AbuseIPDB integration |
 | SOAR / automation | n8n workflows |
-| LLM integration | Claude API, prompt engineering |
+| LLM integration | Groq API (Llama 3.3 70B), prompt engineering |
 | Incident response | TheHive case management |
 | Python / scripting | Wazuh integration script |
 | Linux administration | Ubuntu VM, Docker, systemd |
@@ -651,15 +668,16 @@ This project maps to real SOC/security engineering job requirements:
 
 - [x] Phase 0 — Infrastructure
 - [x] Phase 1A — Sysmon on Windows
-- [ ] Phase 1B — Ubuntu agent + auditd
-- [ ] Phase 2 — Attack simulation
-- [ ] Phase 3 — n8n setup
-- [ ] Phase 4 — Wazuh → n8n pipeline
-- [ ] Phase 5 — Enrichment
-- [ ] Phase 6 — AI analyst (Claude)
-- [ ] Phase 7 — Response & cases
-- [ ] Phase 8 — Metrics
-- [ ] Phase 9 — Portfolio polish
+- [x] Phase 1B — Ubuntu agent + auditd
+- [ ] Phase 2 — Attack simulation (Atomic Red Team + Kali)
+- [x] Phase 3 — n8n setup (Docker on Ubuntu VM)
+- [x] Phase 4 — Wazuh → n8n pipeline (integration script + webhook)
+- [x] Phase 5 — Enrichment (VirusTotal + AbuseIPDB)
+- [x] Phase 6 — AI analyst (Llama 3.3 70B via Groq)
+- [x] Phase 7 — Slack alerting (real-time notifications working)
+- [ ] Phase 7B — TheHive case management (planned)
+- [ ] Phase 8 — Metrics dashboard
+- [ ] Phase 9 — Portfolio polish (GitHub repo + demo video)
 
 ---
 

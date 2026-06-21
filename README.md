@@ -1,4 +1,4 @@
-# 🛡️ Sentinel — AI-Augmented SOC Home Lab
+# AI-Augmented SOC Home Lab
 
 > A production-inspired Security Operations Center built from scratch: Wazuh detects attacks, an LLM triages every alert like a Tier-1 analyst, n8n orchestrates the response, and TheHive manages cases — automatically.
 

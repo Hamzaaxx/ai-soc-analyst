@@ -116,10 +116,7 @@ Most SOC labs stop at "I installed a SIEM and watched alerts." This project goes
 - [x] VirusTotal free API key
 - [x] AbuseIPDB free API key
 - [x] Groq API key (Llama 3.3 70B)
-- [x] Slack workspace + incoming webhook URL
-- [ ] TheHive installed (planned)
-- [ ] GitHub repo initialized
-
+- [x] Slack workspace + incoming webhook UR
 ---
 
 ## 🗺️ Build Phases

@@ -664,22 +664,6 @@ This project maps to real SOC/security engineering job requirements:
 
 ---
 
-## 🚧 Current Status
-
-- [x] Phase 0 — Infrastructure
-- [x] Phase 1A — Sysmon on Windows
-- [x] Phase 1B — Ubuntu agent + auditd
-- [ ] Phase 2 — Attack simulation (Atomic Red Team + Kali)
-- [x] Phase 3 — n8n setup (Docker on Ubuntu VM)
-- [x] Phase 4 — Wazuh → n8n pipeline (integration script + webhook)
-- [x] Phase 5 — Enrichment (VirusTotal + AbuseIPDB)
-- [x] Phase 6 — AI analyst (Llama 3.3 70B via Groq)
-- [x] Phase 7 — Slack alerting (real-time notifications working)
-- [ ] Phase 7B — TheHive case management (planned)
-- [ ] Phase 8 — Metrics dashboard
-- [ ] Phase 9 — Portfolio polish (GitHub repo + demo video)
-
----
 
 ## 👤 Author
 

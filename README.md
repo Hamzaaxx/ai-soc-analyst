@@ -661,14 +661,3 @@ This project maps to real SOC/security engineering job requirements:
 | Python / scripting | Wazuh integration script |
 | Linux administration | Ubuntu VM, Docker, systemd |
 | Detection engineering | Custom Wazuh rules, alert tuning |
-
----
-
-
-## 👤 Author
-
-**Hamza** — Cybersecurity student, SOC internship candidate at Ribatis (Tier 3 Datacenter)
-
----
-
-*Built as a hands-on preparation for a real SOC internship. Every component reflects tools and workflows used in production environments.*
